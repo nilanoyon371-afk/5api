@@ -234,14 +234,11 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
             base = str(api_base_url).rstrip("/")
                 
             # Prevent double wrapping
-            if "/api/v1/hls/proxy" in stream_url:
-                return response # already wrapped
-
-            encoded_url = quote(stream_url)
-            encoded_referer = quote(referer)
-            
-            stream_url = f"{base}/api/v1/hls/proxy?url={encoded_url}&referer={encoded_referer}"
-            # RedTube user_agent logic removed
+            if "/api/v1/hls/proxy" not in stream_url:
+                encoded_url = quote(stream_url)
+                encoded_referer = quote(referer)
+                stream_url = f"{base}/api/v1/hls/proxy?url={encoded_url}&referer={encoded_referer}"
+                # RedTube user_agent logic removed
     
     # Build base response
     response = {
