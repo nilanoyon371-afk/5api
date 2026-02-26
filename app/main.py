@@ -226,6 +226,7 @@ async def get_categories(source: str) -> list[CategoryItem]:
         if s == "beeg": return [CategoryItem(**c) for c in beeg.get_categories()]
         if s == "spankbang": return [CategoryItem(**c) for c in spankbang.get_categories()]
         if s == "onlyfans" or s == "fapnut": return [CategoryItem(**c) for c in await fapnut.get_categories()]
+        if s == "pornxp": return [CategoryItem(**c) for c in pornxp.get_categories()]
         raise HTTPException(status_code=400, detail="Unknown source")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load categories: {str(e)}")

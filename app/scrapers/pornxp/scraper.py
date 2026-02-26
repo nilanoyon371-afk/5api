@@ -142,6 +142,16 @@ async def scrape(url: str) -> dict[str, Any]:
     return parse_page(html, url)
 
 
+
+def get_categories() -> list[dict[str, Any]]:
+    import os
+    file_path = os.path.join(os.path.dirname(__file__), "categories.json")
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+
 async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dict[str, Any]]:
     # PornXP uses 1-based page index in URLs or similar?
     # Based on search exploration: https://pornxp.io/search?q=QUERY
