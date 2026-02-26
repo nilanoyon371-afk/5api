@@ -275,6 +275,100 @@ async def direct_stream_endpoint(
         raise HTTPException(status_code=500, detail=f"Failed to fetch stream URL: {str(e)}")
 
 
+# --- Explore Sources ---
+@api_v1_router.get("/sources", tags=["Sources"])
+async def get_sources():
+    """
+    Returns the list of supported scraper sources for the Explore page.
+    Moving this out of the Flutter app means sources can be updated remotely.
+    """
+    return {
+        "status": "success",
+        "data": [
+            {
+                "baseUrl": "https://masa49.org/",
+                "nickname": "Masa49",
+                "favicon": "https://masa49.org/favicon.ico",
+                "accentColor": "#7C4DFF",
+                "category": "free",
+                "isVerified": False,
+            },
+            {
+                "baseUrl": "https://xhamster.com/",
+                "nickname": "xHamster",
+                "favicon": "https://xhamster.com/favicon.ico",
+                "accentColor": "#FF5252",
+                "category": "free",
+                "isVerified": False,
+            },
+            {
+                "baseUrl": "https://www.xnxx.com/",
+                "nickname": "XNXX",
+                "favicon": "https://www.xnxx.com/favicon.ico",
+                "accentColor": "#448AFF",
+                "category": "free",
+                "isVerified": True,
+            },
+            {
+                "baseUrl": "https://www.xvideos.com/",
+                "nickname": "XVideos",
+                "favicon": "https://www.xvideos.com/favicon.ico",
+                "accentColor": "#FFAB40",
+                "category": "free",
+                "isVerified": True,
+            },
+            {
+                "baseUrl": "https://www.pornhub.com/",
+                "nickname": "Pornhub",
+                "favicon": "https://www.pornhub.com/favicon.ico",
+                "accentColor": "#FF9100",
+                "category": "free",
+                "isVerified": False,
+            },
+            {
+                "baseUrl": "https://www.youporn.com/",
+                "nickname": "YouPorn",
+                "favicon": "https://www.youporn.com/favicon.ico",
+                "accentColor": "#FF4081",
+                "category": "free",
+                "isVerified": False,
+            },
+            {
+                "baseUrl": "https://www.redtube.com/",
+                "nickname": "RedTube",
+                "favicon": "https://www.redtube.com/favicon.ico",
+                "accentColor": "#D32F2F",
+                "category": "free",
+                "isVerified": False,
+            },
+            {
+                "baseUrl": "https://beeg.com/",
+                "nickname": "Beeg",
+                "favicon": "https://beeg.com/favicon.ico",
+                "accentColor": "#00BFA5",
+                "category": "free",
+                "isVerified": False,
+            },
+            {
+                "baseUrl": "https://spankbang.com/",
+                "nickname": "SpankBang",
+                "favicon": "https://spankbang.com/favicon.ico",
+                "accentColor": "#FFC107",
+                "category": "free",
+                "isVerified": False,
+            },
+            {
+                "baseUrl": "https://fapnut.net/",
+                "nickname": "Fapnut",
+                "favicon": "https://fapnut.net/favicon.ico",
+                "accentColor": "#00AFF0",
+                "category": "paid",
+                "isVerified": False,
+            },
+        ],
+    }
+
+
 # --- AppHub Version ---
 from app import apphub_version
 @api_v1_router.get("/apphub/version", tags=["System"])

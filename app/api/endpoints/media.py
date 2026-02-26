@@ -38,7 +38,7 @@ DUMMY_MEDIA_CONFIG = MediaConfigData(
                     type="live",
                     icon="sports_soccer_rounded",
                     color_hex="#4CAF50",
-                    playlist_url="https://premium-iptv.com/api/sports.m3u",
+                    playlist_url="https://raw.githubusercontent.com/milon4999/apphub-release/refs/heads/main/Sports2.m3u",
                 ),
                 MediaCategoryResponse(
                     id="BD",
