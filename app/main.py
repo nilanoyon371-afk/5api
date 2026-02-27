@@ -312,7 +312,7 @@ async def get_notifications():
             message="Check out our premium plans for faster streaming and exclusive content.",
             type="warning",
             action_text="View Plans",
-            action_url="apphub://premium",
+            action_url="apphub://rewards",
             created_at=datetime.now()
         )
     ]
