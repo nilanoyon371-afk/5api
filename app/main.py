@@ -279,7 +279,11 @@ async def direct_stream_endpoint(
         raise HTTPException(status_code=500, detail=f"Failed to fetch stream URL: {str(e)}")
 
 
-app.include_router(explore.router, prefix="/api/v1")
+# include routers
+api_v1_router.include_router(explore.router)
+api_v1_router.include_router(recommendations.router, prefix="/recommendations", tags=["AI Recommendations"])
+api_v1_router.include_router(hls.router, prefix="/hls", tags=["HLS Proxy"])
+api_v1_router.include_router(media.router)
 
 
 # --- Notifications ---
@@ -357,11 +361,8 @@ async def get_apphub_version():
     }
 
 
-# Include Routers
+# Include Main V1 Router
 app.include_router(api_v1_router)
-app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["AI Recommendations"])
-app.include_router(hls.router, prefix="/api/v1/hls", tags=["HLS Proxy"])
-app.include_router(media.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["System"])
