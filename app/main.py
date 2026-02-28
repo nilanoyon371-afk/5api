@@ -326,15 +326,6 @@ async def get_notifications():
             message="Media services will be down for 30 minutes tonight at 2 AM.",
             type="error",
             created_at=datetime.now()
-        ),
-        NotificationItem(
-            id="5",
-            title="Source Update Available",
-            message="New content sources have been added. Refresh to see them.",
-            type="info",
-            show_in_bar=True,
-            target_page="source",
-            created_at=datetime.now()
         )
     ]
     return NotificationResponse(
