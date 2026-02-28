@@ -24,7 +24,7 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         }
     """
     # Import here to avoid circular dependency
-    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp
+    from app.scrapers import xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner
     from urllib.parse import urlparse
     
     # Parse URL to get host
@@ -57,10 +57,12 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
         scraper_module = fapnut
     elif pornxp.can_handle(host):
         scraper_module = pornxp
+    elif hqporner.can_handle(host):
+        scraper_module = hqporner
     else:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported host: {host}. Supported: xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp"
+            detail=f"Unsupported host: {host}. Supported: xnxx, xhamster, xvideos, masa49, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner"
         )
     
     try:
@@ -206,15 +208,14 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
     
     # Determine format and refine quality label
     fmt = "mp4"
+    should_proxy = False
+    referer = ""
     if ".m3u8" in stream_url:
         fmt = "hls"
         if selected_quality == "default":
             selected_quality = "adaptive"
             
         # PROXY WRAPPER FOR BEEG and RedTube
-        should_proxy = False
-        referer = ""
-        
         if "externulls.com" in stream_url or "beeg.com" in stream_url:
              should_proxy = True
              referer = "https://beeg.com/"

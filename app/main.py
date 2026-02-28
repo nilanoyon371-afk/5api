@@ -265,6 +265,8 @@ async def video_info_endpoint(request: Request, url: str = Query(..., descriptio
     api_base = settings.BASE_URL or str(request.base_url)
     try:
         return await get_video_info(url, api_base_url=api_base)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch video info: {str(e)}")
 
@@ -278,6 +280,8 @@ async def direct_stream_endpoint(
     api_base = settings.BASE_URL or str(request.base_url)
     try:
         return await get_stream_url(url, quality, api_base_url=api_base)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch stream URL: {str(e)}")
 
