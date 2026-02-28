@@ -325,6 +325,15 @@ async def get_notifications():
             show_in_bar=True,
             target_page="media",
             created_at=datetime.now()
+        ),
+        NotificationItem(
+            id="5",
+            title="Source Update Available",
+            message="New content sources have been added. Refresh to see them.",
+            type="info",
+            show_in_bar=True,
+            target_page="source",
+            created_at=datetime.now()
         )
     ]
     return NotificationResponse(
