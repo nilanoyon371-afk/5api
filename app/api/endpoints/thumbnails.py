@@ -23,12 +23,13 @@ async def thumbnail_proxy(
     url_lower = url.lower()
     is_hqporner = "hqporner.com" in url_lower
     is_youporn = "ypncdn.com" in url_lower or "youporn.com" in url_lower
+    is_pornhub = "phncdn.com" in url_lower or "pornhub.com" in url_lower
     
-    if not (is_hqporner or is_youporn):
+    if not (is_hqporner or is_youporn or is_pornhub):
         raise HTTPException(status_code=403, detail="Only allowed domains are supported")
         
-    if is_youporn and ".mp4/" not in url_lower:
-        raise HTTPException(status_code=403, detail="Only YouPorn .mp4 video previews are allowed via proxy")
+    if (is_youporn or is_pornhub) and ".mp4/" not in url_lower:
+        raise HTTPException(status_code=403, detail="Only YouPorn/Pornhub .mp4 video previews are allowed via proxy")
     
     # Headers to send to upstream
     headers = {}
@@ -45,6 +46,8 @@ async def thumbnail_proxy(
             headers["Referer"] = "https://hqporner.com/"
         elif is_youporn:
             headers["Referer"] = "https://www.youporn.com/"
+        elif is_pornhub:
+            headers["Referer"] = "https://www.pornhub.com/"
 
     try:
         # Use a single-use client for simplicity, though a pooled one is better for high volume
@@ -83,11 +86,12 @@ def wrap_thumbnail_url(url: str, api_base_url: str) -> str:
     url_lower = url.lower()
     is_hqporner = "hqporner.com" in url_lower
     is_youporn = "ypncdn.com" in url_lower or "youporn.com" in url_lower
+    is_pornhub = "phncdn.com" in url_lower or "pornhub.com" in url_lower
     
-    if not (is_hqporner or is_youporn):
+    if not (is_hqporner or is_youporn or is_pornhub):
         return url
         
-    if is_youporn:
+    if is_youporn or is_pornhub:
         # Only proxy dynamic .mp4 video previews (these require valid referer/tokens)
         # Leave standard static .jpg thumbnails unproxied to save bandwidth
         if ".mp4/" not in url_lower:
