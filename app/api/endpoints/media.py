@@ -22,7 +22,7 @@ DUMMY_MEDIA_CONFIG = MediaConfigData(
                     type="live",
                     icon="live_tv_rounded",
                     color_hex="#2196F3",
-                    playlist_url="https://premium-iptv.com/api/live.m3u",
+                    playlist_url="https://iptv-org.github.io/iptv/index.m3u",
                 ),
                 MediaCategoryResponse(
                     id="movies",
@@ -71,7 +71,7 @@ DUMMY_MEDIA_CONFIG = MediaConfigData(
                     type="live",
                     icon="public_rounded",
                     color_hex="#00BCD4",
-                    playlist_url="https://iptv-org.github.io/iptv/index.m3u",
+                    playlist_url="https://premium-iptv.com/api/live.m3u",
                 ),
                 MediaCategoryResponse(
                     id="documentaries",
