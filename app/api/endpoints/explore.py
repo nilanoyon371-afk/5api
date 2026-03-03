@@ -145,6 +145,28 @@ EXPLORE_SOURCES = [
         searchUrlTemplate="https://hqporner.com/?q={query}",
         sourceId="hqporner",
     ),
+    ExploreSourceResponse(
+        baseUrl="https://xxxparodyhd.net/",
+        nickname="XXXParodyHD",
+        favicon="https://xxxparodyhd.net/wp-content/uploads/2020/09/cropped-xxxparodyhd-192x192.png",
+        accentColor="#E040FB",
+        category="free",
+        isVerified=False,
+        hasCategories=True,
+        searchUrlTemplate="https://xxxparodyhd.net/?s={query}",
+        sourceId="xxxparodyhd",
+    ),
+    ExploreSourceResponse(
+        baseUrl="https://www.pornwex.tv/",
+        nickname="PornWex",
+        favicon="https://www.pornwex.tv/favicon.ico",
+        accentColor="#FF6D00",
+        category="free",
+        isVerified=False,
+        hasCategories=True,
+        searchUrlTemplate="https://www.pornwex.tv/search/{query}/",
+        sourceId="pornwex",
+    ),
 ]
 
 EXPLORE_CONFIG = ExploreConfigData(

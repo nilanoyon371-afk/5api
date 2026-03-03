@@ -29,7 +29,7 @@ from app.api.endpoints import recommendations, hls, media, explore, thumbnails
 from fastapi import APIRouter
 
 # Scrapers & Models
-from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner
+from app.scrapers import masa49, xhamster, xnxx, xvideos, pornhub, youporn, redtube, beeg, spankbang, fapnut, pornxp, hqporner, xxxparodyhd, pornwex
 from app.models.schemas import ScrapeResponse, ListItem, CategoryItem, ScrapeRequest, ListRequest
 
 logging.basicConfig(level=logging.INFO)
@@ -114,6 +114,8 @@ async def _scrape_dispatch(url: str, host: str) -> dict[str, object]:
     if fapnut.can_handle(host): return await fapnut.scrape(url)
     if pornxp.can_handle(host): return await pornxp.scrape(url)
     if hqporner.can_handle(host): return await hqporner.scrape(url)
+    if xxxparodyhd.can_handle(host): return await xxxparodyhd.scrape(url)
+    if pornwex.can_handle(host): return await pornwex.scrape(url)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
 async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> list[dict[str, object]]:
@@ -129,6 +131,8 @@ async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> lis
     if fapnut.can_handle(host): return await fapnut.list_videos(base_url=base_url, page=page, limit=limit)
     if pornxp.can_handle(host): return await pornxp.list_videos(base_url=base_url, page=page, limit=limit)
     if hqporner.can_handle(host): return await hqporner.list_videos(base_url=base_url, page=page, limit=limit)
+    if xxxparodyhd.can_handle(host): return await xxxparodyhd.list_videos(base_url=base_url, page=page, limit=limit)
+    if pornwex.can_handle(host): return await pornwex.list_videos(base_url=base_url, page=page, limit=limit)
     raise HTTPException(status_code=400, detail="Unsupported host")
 
 async def _crawl_dispatch(base_url: str, host: str, start_page: int, max_pages: int, per_page_limit: int, max_items: int) -> list[dict[str, object]]:
@@ -249,6 +253,8 @@ async def get_categories(source: str) -> list[CategoryItem]:
         if s == "onlyfans" or s == "fapnut": return [CategoryItem(**c) for c in await fapnut.get_categories()]
         if s == "pornxp": return [CategoryItem(**c) for c in pornxp.get_categories()]
         if s == "hqporner": return [CategoryItem(**c) for c in hqporner.get_categories()]
+        if s == "xxxparodyhd": return [CategoryItem(**c) for c in xxxparodyhd.get_categories()]
+        if s == "pornwex": return [CategoryItem(**c) for c in pornwex.get_categories()]
         raise HTTPException(status_code=400, detail="Unknown source")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load categories: {str(e)}")
