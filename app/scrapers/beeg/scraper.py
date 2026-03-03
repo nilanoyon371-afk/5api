@@ -21,19 +21,15 @@ def get_categories() -> list[dict]:
         return []
 
 async def fetch_html(url: str) -> str:
+    from app.core import pool
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         # Beeg seems to check Referer for some API calls, but for HTML it's fine
     }
-    async with httpx.AsyncClient(
-        follow_redirects=True,
-        timeout=httpx.Timeout(20.0, connect=20.0),
-        headers=headers,
-    ) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        return resp.text
+    resp = await pool.client.get(url, headers=headers)
+    resp.raise_for_status()
+    return resp.text
 
 async def scrape(url: str) -> dict[str, Any]:
     # Beeg video URLs are usually https://beeg.com/{id}
@@ -83,14 +79,14 @@ async def scrape(url: str) -> dict[str, Any]:
     }
     
     try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
-            resp = await client.get(api_url)
-            if resp.status_code == 404 and len(str(api_id)) > 10:
-                # Retry? maybe logic was wrong
-                pass
-            resp.raise_for_status()
-            data = resp.json()
-            return _parse_externulls_response(data, url, api_id)
+        from app.core import pool
+        resp = await pool.client.get(api_url, headers=headers)
+        if resp.status_code == 404 and len(str(api_id)) > 10:
+            # Retry? maybe logic was wrong
+            pass
+        resp.raise_for_status()
+        data = resp.json()
+        return _parse_externulls_response(data, url, api_id)
     except Exception as e:
         print(f"Beeg scrape error: {e}")
         # Fallback to HTML if API fails? HTML is likely empty but worth a shot for legacy links
@@ -226,10 +222,10 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
         api_url = f"{API_BASE}/tag?id=27173&limit={limit}&offset={offset}"
         
     try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
-            resp = await client.get(api_url)
-            resp.raise_for_status()
-            data = resp.json()
+        from app.core import pool
+        resp = await pool.client.get(api_url, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
             
     except Exception as e:
         print(f"Beeg list error: {e}")

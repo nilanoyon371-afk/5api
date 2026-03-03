@@ -369,7 +369,10 @@ async def get_apphub_version():
     return {
         "version": apphub_version.VERSION,
         "buildNumber": apphub_version.BUILD_NUMBER,
+        "minSupportedBuild": getattr(apphub_version, "MIN_SUPPORTED_BUILD", 1),
+        "releaseDate": getattr(apphub_version, "RELEASE_DATE", ""),
         "downloadUrl": apphub_version.DOWNLOAD_URL,
+        "apkHash": getattr(apphub_version, "APK_HASH", ""),
         "changelog": apphub_version.CHANGELOG.strip(),
         "changelogTitle": apphub_version.CHANGELOG_TITLE,
         "isMandatory": apphub_version.IS_MANDATORY,
