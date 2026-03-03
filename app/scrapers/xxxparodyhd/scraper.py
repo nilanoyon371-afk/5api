@@ -213,18 +213,17 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
 
     items: list[dict[str, Any]] = []
 
-    # XXXParodyHD uses WordPress-style post listing
-    # Look for article/post containers
-    for article in soup.select("article, .post-item, .item-list .post, .movies-list .item"):
+    # XXXParodyHD uses .ml-item containers (WP-Movie theme)
+    for card in soup.select(".ml-item"):
         try:
-            # Get the main link
-            link = article.select_one("a[href*='xxxparodyhd.net']")
+            # Main link: a.ml-mask
+            link = card.select_one("a.ml-mask")
             if not link:
-                link = article.select_one("a[href]")
+                link = card.select_one("a[href]")
             if not link:
                 continue
 
-            href = link.get("href", "")
+            href = link.get("href", "") or link.get("data-href", "")
             if not href:
                 continue
 
@@ -234,23 +233,29 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
             if any(p in href for p in skip_patterns):
                 continue
 
-            # Title
-            title_el = article.select_one("h2 a, h3 a, .entry-title a, .post-title a")
-            title = _text(title_el) if title_el else link.get("title") or _text(link)
-            if not title or title in ("Watch Movie", "Favorite"):
+            # Title from .mli-info h2, or link title/oldtitle attribute
+            title_el = card.select_one(".mli-info h2")
+            title = _text(title_el) if title_el else (
+                link.get("oldtitle") or link.get("title") or _text(link)
+            )
+            if not title:
                 continue
 
             # Thumbnail
-            img = article.select_one("img")
+            img = card.select_one("img")
             thumb = _best_image_url(img)
 
-            # Duration
-            dur_el = article.select_one(".duration, .runtime, .movie-duration")
+            # Duration from .mli-info1
+            dur_el = card.select_one(".mli-info1")
             duration = _text(dur_el) if dur_el else None
 
-            # Year
-            year_el = article.select_one("a[href*='/release-year/']")
-            year = _text(year_el) if year_el else None
+            # Year from hidden_tip div
+            year = None
+            tip = card.select_one("#hidden_tip")
+            if tip:
+                year_link = tip.select_one("a[href*='/release-year/']")
+                if year_link:
+                    year = _text(year_link)
 
             items.append({
                 "url": href,
@@ -263,3 +268,4 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
             continue
 
     return items
+
