@@ -250,12 +250,23 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
                 stream_url = f"{base}/api/v1/hls/proxy?url={encoded_url}&referer={encoded_referer}"
                 # RedTube user_agent logic removed
     
+    # Try to find a referer in the source stream metadata
+    source_referer = None
+    all_streams = video_data.get("streams", [])
+    for s in all_streams:
+        if s.get("url") == stream_url:
+            source_referer = s.get("referer")
+            break
+
     # Build base response
     response = {
         "stream_url": stream_url,
         "quality": selected_quality,
         "format": fmt
     }
+    
+    if source_referer:
+        response["referer"] = source_referer
     
     # Add available_qualities for Pornhub, YouPorn, and RedTube
     from urllib.parse import urlparse
