@@ -3,11 +3,7 @@ from __future__ import annotations
 import json
 import re
 import os
-import random
-import string
-import time
 from typing import Any, Optional
-from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
@@ -56,194 +52,7 @@ def _best_image_url(img: Any) -> Optional[str]:
     return None
 
 
-async def resolve_dood(embed_url: str) -> Optional[tuple[str, str]]:
-    try:
-        parsed = urlparse(embed_url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}"
-        
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-            "Referer": "https://xxxparodyhd.net/",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Sec-Fetch-Dest": "iframe",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "cross-site",
-            "Upgrade-Insecure-Requests": "1",
-        }
-        
-        resp = await pool.client.get(embed_url, headers=headers, follow_redirects=True)
-        if resp.status_code != 200:
-            return None
-        
-        html = resp.text
-        pass_match = re.search(r"['\"]/pass_md5/([^'\"]+)['\"]", html)
-        if not pass_match:
-            return None
-            
-        pass_path = pass_match.group(1)
-        pass_url = f"{base_url}/pass_md5/{pass_path}"
-        
-        pass_headers = {
-            "User-Agent": headers["User-Agent"],
-            "Referer": str(resp.url),
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-        }
-        
-        pass_resp = await pool.client.get(pass_url, headers=pass_headers)
-        if pass_resp.status_code != 200:
-            return None
-            
-        base_cdn = pass_resp.text
-        
-        rand_str = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
-        token = pass_path.split('/')[-1]
-        expiry = int(time.time() * 1000)
-        
-        direct_url = f"{base_cdn}{rand_str}?token={token}&expiry={expiry}"
-        return direct_url, str(resp.url)
-    except Exception:
-        return None
-
-
-async def resolve_voe(embed_url: str) -> Optional[tuple[str, str]]:
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Referer": "https://xxxparodyhd.net/",
-        }
-        
-        resp = await pool.client.get(embed_url, headers=headers, follow_redirects=True)
-        if resp.status_code != 200:
-            return None
-            
-        html = resp.text
-        
-        js_redirect = re.search(r"window\.location\.href\s*=\s*['\"]([^'\"]+)['\"]", html)
-        if js_redirect:
-            redirect_url = js_redirect.group(1)
-            if redirect_url.startswith("//"):
-                redirect_url = f"https:{redirect_url}"
-            elif not redirect_url.startswith("http"):
-                parsed = urlparse(str(resp.url))
-                redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                
-            headers["Referer"] = str(resp.url)
-            resp = await pool.client.get(redirect_url, headers=headers, follow_redirects=True)
-            if resp.status_code != 200:
-                return None
-            html = resp.text
-
-        m3u8_match = re.search(r"['\"](https?://[^'\"\s]+\.m3u8[^'\"\s]*)['\"]", html)
-        if m3u8_match:
-            return m3u8_match.group(1), str(resp.url)
-            
-        base64_sources = re.search(r"sources['\"]?\s*:\s*['\"]([a-zA-Z0-9+/=]{50,})['\"]", html)
-        if not base64_sources:
-             base64_sources = re.search(r"['\"]sources['\"]\s*:\s*\[\s*['\"]([^'\"]+)['\"]", html)
-             
-        if base64_sources:
-             import base64
-             try:
-                 decoded = base64.b64decode(base64_sources.group(1)).decode('utf-8', errors='ignore')
-                 m3u8_match = re.search(r"['\"](https?://[^'\"\s]+\.m3u8[^'\"\s]*)['\"]", decoded)
-                 if m3u8_match:
-                     return m3u8_match.group(1), str(resp.url)
-             except Exception:
-                 pass
-        
-        return None
-    except Exception:
-        return None
-
-
-async def resolve_mixdrop(embed_url: str) -> Optional[tuple[str, str]]:
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Referer": "https://xxxparodyhd.net/",
-        }
-        
-        resp = await pool.client.get(embed_url, headers=headers, follow_redirects=True)
-        if resp.status_code != 200:
-            return None
-            
-        html = resp.text
-        # Look for MDCore.wurl or similar in the HTML
-        wurl_match = re.search(r"MDCore\.wurl\s*=\s*['\"]([^'\"]+)['\"]", html)
-        if wurl_match:
-            wurl = wurl_match.group(1)
-            if wurl.startswith("//"):
-                wurl = f"https:{wurl}"
-            return wurl, str(resp.url)
-            
-        # If not found, it might be in a packed script
-        # 0.11="//3.4.2/..."
-        packed_match = re.search(r"eval\(function\(p,a,c,k,e,d\).+?['\"]\.split\(", html)
-        if packed_match:
-            # Extract word list
-            k_match = re.search(r"['\"]([^'\"]+)['\"]\s*\.split\s*\(\s*['\"]\|['\"]\s*\)", html)
-            if k_match:
-                words = k_match.group(1).split('|')
-                # Find the template string
-                # Usually it starts with 0.Something or contains //
-                template_match = re.search(r"['\"]([^'\"]*//[^'\"]+)['\"]", html)
-                if template_match:
-                    template = template_match.group(1)
-                    # Reconstruct the URL by replacing indices
-                    # This is complex to do right with regex, but we can try common indices
-                    def replace_func(match):
-                        idx = int(match.group(0))
-                        if idx < len(words) and words[idx]:
-                            return words[idx]
-                        return match.group(0)
-                        
-                    url = re.sub(r"\b\d+\b", replace_func, template)
-                    if url.startswith("//"):
-                        url = f"https:{url}"
-                    if "http" in url:
-                        return url.replace(" ", ""), str(resp.url)
-
-        # Fallback: look for any .mp4 link in the words list if packed
-        if packed_match and k_match:
-             for word in words:
-                 if 'mp4' in word and word.startswith('http'):
-                     return word, str(resp.url)
-
-        # Final Fallback: look for any MP4 link
-        mp4_match = re.search(r"['\"](https?://[^'\"\s]+\.mp4[^'\"\s]*)['\"]", html)
-        if mp4_match:
-            return mp4_match.group(1), str(resp.url)
-            
-        return None
-    except Exception:
-        return None
-
-
-async def resolve_embed(embed_url: str) -> Optional[tuple[str, str]]:
-    try:
-        parsed = urlparse(embed_url)
-        host = parsed.netloc.lower()
-        
-        if any(h in host for h in ("dood", "doply", "myvidplay", "ds2play")):
-            return await resolve_dood(embed_url)
-        
-        if "voe" in host:
-            return await resolve_voe(embed_url)
-        
-        if "mixdrop" in host:
-            return await resolve_mixdrop(embed_url)
-        
-        return None
-    except Exception:
-        return None
-
-
-async def parse_page(html: str, url: str) -> dict[str, Any]:
+def parse_page(html: str, url: str) -> dict[str, Any]:
     soup = BeautifulSoup(html, "lxml")
 
     # Title
@@ -295,31 +104,15 @@ async def parse_page(html: str, url: str) -> dict[str, Any]:
     # XXXParodyHD doesn't host videos directly - it links to external embed players
     video_url = None
     streams = []
-    
-    # Try to resolve embeds to direct streams
     if embed_urls:
+        # Use first embed URL as default
+        video_url = embed_urls[0]["url"]
         for idx, embed in enumerate(embed_urls):
-            resolved = await resolve_embed(embed["url"])
-            if resolved:
-                direct_url, referer = resolved
-                streams.append({
-                    "url": direct_url,
-                    "quality": embed.get("label", f"Player {idx + 1}"),
-                    "format": "hls" if ".m3u8" in direct_url else "mp4",
-                    "referer": referer
-                })
-                if video_url is None:
-                    video_url = direct_url
-            else:
-                # Fallback to embed if resolution failed or not supported
-                streams.append({
-                    "url": embed["url"],
-                    "quality": embed.get("label", f"Player {idx + 1}"),
-                    "format": "embed",
-                })
-        
-        if video_url is None and streams:
-            video_url = streams[0]["url"]
+            streams.append({
+                "url": embed["url"],
+                "quality": embed.get("label", f"Player {idx + 1}"),
+                "format": "embed",
+            })
 
     # Tags / Genres
     tags = []
@@ -403,7 +196,7 @@ async def parse_page(html: str, url: str) -> dict[str, Any]:
 
 async def scrape(url: str) -> dict[str, Any]:
     html = await fetch_html(url)
-    return await parse_page(html, url)
+    return parse_page(html, url)
 
 
 def get_categories() -> list[dict[str, Any]]:
