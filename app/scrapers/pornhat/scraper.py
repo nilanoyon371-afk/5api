@@ -192,8 +192,11 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
         url = url.rstrip("/")
 
     if page > 1:
-        sep = "&" if "?" in url else "?"
-        url += f"{sep}page={page}"
+        # Pornhat uses path-based pagination: /page/ or /search/query/page/
+        # Ensure url ends with a slash before appending page
+        if not url.endswith("/"):
+            url += "/"
+        url += f"{page}/"
 
     try:
         html = await fetch_html(url)
