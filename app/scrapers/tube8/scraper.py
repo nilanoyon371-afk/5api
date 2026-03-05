@@ -219,21 +219,33 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
         # Duration
         duration = "0:00"
         if container is not None:
-            dur_el = container.select_one(".duration, .tm_video_duration, .video-duration")
+            # Prefer sub-selectors first
+            dur_el = container.select_one(".tm_video_duration, .video-duration, .duration, .video-duration-text")
             if dur_el:
                 duration = dur_el.get_text(strip=True)
 
         # Views
         views = "0"
         if container is not None:
-            v_el = container.select_one(".info-views, .views, .video_views")
+            v_el = container.select_one(".info-views, .views, .video_views, .video-views-text")
             if v_el:
-                views = v_el.get_text(strip=True).replace("views", "").strip()
+                # Remove non-numeric garbage but keep K/M
+                raw_views = v_el.get_text(strip=True).lower()
+                # Use regex to find the first sequence that looks like a count (e.g. 1.2K)
+                v_match = re.search(r"(\d+[\d\.,]*[km]?)", raw_views)
+                if v_match:
+                    views = v_match.group(1).upper()
+                else:
+                    views = raw_views.replace("views", "").strip()
 
         # Uploader
         uploader = "Unknown"
         if container is not None:
-            u_el = container.select_one(".author-title-text, .username a, .uploader a")
+            u_el = container.select_one(".author-title-text, .video-author-text, .username, .uploader")
+            if not u_el:
+                # Fallback: find any link with /user/ in it
+                u_el = container.select_one('a[href*="/user/"], a[href*="/profiles/"]')
+            
             if u_el:
                 uploader = u_el.get_text(strip=True)
 
