@@ -1,9 +1,9 @@
 """
-HTTP Connection Pooling for Scrapers using httpx
-Reuse connections for 50-100ms performance boost per request
+HTTP Connection Pooling for Scrapers
+Reuse connections for 50-100ms performance boost
 """
 
-import httpx
+import aiohttp
 import logging
 from typing import Optional
 
@@ -14,61 +14,55 @@ class ConnectionPool:
     """Singleton connection pool for all HTTP requests"""
     
     _instance: Optional['ConnectionPool'] = None
-    _client: Optional[httpx.AsyncClient] = None
+    _session: Optional[aiohttp.ClientSession] = None
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
     
-    @property
-    def client(self) -> httpx.AsyncClient:
+    async def get_session(self) -> aiohttp.ClientSession:
         """
-        Get or create httpx.AsyncClient with connection pooling
+        Get or create aiohttp session with connection pooling
         
         Returns:
-            Configured httpx.AsyncClient
+            Configured ClientSession
         """
-        if self._client is None or self._client.is_closed:
+        if self._session is None or self._session.closed:
             # Connection pooling configuration
-            limits = httpx.Limits(
-                max_keepalive_connections=100, 
-                max_connections=200, 
-                keepalive_expiry=30.0
+            connector = aiohttp.TCPConnector(
+                limit=100,  # Max 100 concurrent connections total
+                limit_per_host=10,  # Max 10 per host
+                ttl_dns_cache=300,  # Cache DNS for 5 minutes
+                enable_cleanup_closed=True,
+                force_close=False  # Keep connections alive
             )
             
             # Connection timeout configuration
-            timeout = httpx.Timeout(
-                30.0, 
-                connect=10.0
+            timeout = aiohttp.ClientTimeout(
+                total=30,  # Total timeout
+                connect=10,  # Connection timeout
+                sock_read=20  # Read timeout
             )
             
-            # Create client
-            self._client = httpx.AsyncClient(
-                limits=limits,
+            # Create session
+            self._session = aiohttp.ClientSession(
+                connector=connector,
                 timeout=timeout,
-                follow_redirects=True,
                 headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-                    'Sec-Ch-Ua-Mobile': '?0',
-                    'Sec-Ch-Ua-Platform': '"Windows"',
-                    'Upgrade-Insecure-Requests': '1',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 }
             )
             
-            logger.info("Created httpx.AsyncClient connection pool with 200 concurrent connections")
+            logger.info("Created HTTP connection pool with 100 connections")
         
-        return self._client
+        return self._session
     
     async def close(self):
-        """Close the client and cleanup connections"""
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
-            logger.info("Closed httpx.AsyncClient connection pool")
+        """Close the session and cleanup connections"""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            logger.info("Closed HTTP connection pool")
 
 
 # Global pool instance
@@ -77,18 +71,20 @@ pool = ConnectionPool()
 
 async def fetch_html(url: str, **kwargs) -> str:
     """
-    Fetch HTML using shared connection pool
+    Fetch HTML using connection pool
     
     Args:
         url: URL to fetch
-        **kwargs: Additional arguments for client.get()
+        **kwargs: Additional arguments for session.get()
         
     Returns:
         HTML content
     """
-    response = await pool.client.get(url, **kwargs)
-    response.raise_for_status()
-    return response.text
+    session = await pool.get_session()
+    
+    async with session.get(url, **kwargs) as response:
+        response.raise_for_status()
+        return await response.text()
 
 
 async def fetch_json(url: str, **kwargs) -> dict:
@@ -97,14 +93,16 @@ async def fetch_json(url: str, **kwargs) -> dict:
     
     Args:
         url: URL to fetch
-        **kwargs: Additional arguments for client.get()
+        **kwargs: Additional arguments for session.get()
         
     Returns:
         JSON data
     """
-    response = await pool.client.get(url, **kwargs)
-    response.raise_for_status()
-    return response.json()
+    session = await pool.get_session()
+    
+    async with session.get(url, **kwargs) as response:
+        response.raise_for_status()
+        return await response.json()
 
 
 async def post_json(url: str, data: dict, **kwargs) -> dict:
@@ -114,11 +112,13 @@ async def post_json(url: str, data: dict, **kwargs) -> dict:
     Args:
         url: URL to post to
         data: JSON data to send
-        **kwargs: Additional arguments for client.post()
+        **kwargs: Additional arguments for session.post()
         
     Returns:
         JSON response
     """
-    response = await pool.client.post(url, json=data, **kwargs)
-    response.raise_for_status()
-    return response.json()
+    session = await pool.get_session()
+    
+    async with session.post(url, json=data, **kwargs) as response:
+        response.raise_for_status()
+        return await response.json()
