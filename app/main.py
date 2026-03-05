@@ -350,6 +350,11 @@ async def video_download_endpoint(request: Request, url: str = Query(..., descri
         for s in streams:
             fmt = s.get("format", "").lower()
             stream_url = s.get("url", "")
+            
+            # Skip explicit HLS streams or m3u8 playlists, which may contain .mp4 in path
+            if fmt == "hls" or ".m3u8" in stream_url.lower():
+                continue
+                
             if fmt == "mp4" or ".mp4" in stream_url.lower():
                 mp4_links.append({
                     "quality": s.get("quality", "unknown"),
