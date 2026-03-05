@@ -280,6 +280,10 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
                 logger.info(f"  Stream {idx}: format={s.get('format')}, quality={s.get('quality')}, url={s.get('url')[:60]}...")
         
         for s in all_streams:
+            # For Tube8, we exclusively want to serve HLS streams in the stream endpoint to support all qualities
+            if "tube8.com" in parsed_url.netloc.lower() and s.get("format", "").lower() == "mp4":
+                continue
+
             # Include both HLS and MP4 for these sites to support both streaming and download options
             quality_label = s.get("quality", "unknown")
             
