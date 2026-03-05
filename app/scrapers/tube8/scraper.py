@@ -264,8 +264,8 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
             "preview_url": thumb,
         }
 
-    # ── Layout A: homepage – a.gtm-event-thumb-click ──────────────────────────
-    for a in soup.select("a.gtm-event-thumb-click"):
+    # ── Layout A: homepage – a.gtm-event-thumb-click / a.video-thumb ──────────
+    for a in soup.select("a.gtm-event-thumb-click, a.video-thumb"):
         if len(items) >= limit:
             break
         try:
