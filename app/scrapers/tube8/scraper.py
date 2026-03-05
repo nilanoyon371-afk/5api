@@ -205,82 +205,103 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
 
     soup = BeautifulSoup(html, "lxml")
     items: list[dict] = []
-
-    # Tube8 uses .gtm-event-thumb-click as anchor on each thumbnail
-    # Structure: outer div > [.thumb-link a.gtm-event-thumb-click img] [.video-title a.video-title-text]
     seen_hrefs: set[str] = set()
 
+    def _make_item(href: str, title: str, thumb: str | None, container) -> dict | None:
+        """Build a list item dict given the resolved fields and a container element for metadata."""
+        if not href or href in seen_hrefs:
+            return None
+        seen_hrefs.add(href)
+
+        if not href.startswith("http"):
+            href = "https://www.tube8.com" + href
+
+        # Duration
+        duration = "0:00"
+        if container is not None:
+            dur_el = container.select_one(".duration, .tm_video_duration, .video-duration")
+            if dur_el:
+                duration = dur_el.get_text(strip=True)
+
+        # Views
+        views = "0"
+        if container is not None:
+            v_el = container.select_one(".info-views, .views, .video_views")
+            if v_el:
+                views = v_el.get_text(strip=True).replace("views", "").strip()
+
+        # Uploader
+        uploader = "Unknown"
+        if container is not None:
+            u_el = container.select_one(".author-title-text, .username a, .uploader a")
+            if u_el:
+                uploader = u_el.get_text(strip=True)
+
+        return {
+            "url": href,
+            "title": title or "Unknown",
+            "thumbnail_url": thumb,
+            "duration": duration,
+            "views": views,
+            "uploader_name": uploader,
+            "preview_url": thumb,
+        }
+
+    # ── Layout A: homepage – a.gtm-event-thumb-click ──────────────────────────
     for a in soup.select("a.gtm-event-thumb-click"):
+        if len(items) >= limit:
+            break
         try:
             href = a.get("href", "")
-            if not href or href in seen_hrefs:
-                continue
-            seen_hrefs.add(href)
-
-            if not href.startswith("http"):
-                href = "https://www.tube8.com" + href
-
-            # Thumbnail from img inside the thumb anchor
             thumb = None
             img = a.find("img")
             if img:
-                thumb = (
-                    img.get("data-src")
-                    or img.get("data-thumb_url")
-                    or img.get("src")
-                )
+                thumb = img.get("data-src") or img.get("data-thumb_url") or img.get("src")
 
-            # Card container = parent of this anchor (div.thumb-link or similar)
-            # The title lives in a sibling div or close ancestor
-            card = a.parent  # e.g. div.thumb-link
-            card_parent = card.parent if card else None  # e.g. div.thumb-info-wrapper
-
-            title = None
-            # Title: a.video-title-text inside the card parent area
+            # Title lives in sibling container
+            card = a.parent
+            card_parent = card.parent if card else None
+            title = ""
             if card_parent:
                 title_el = card_parent.select_one(
-                    "a.video-title-text, .video-title a, .title a, a[class*='title']"
+                    "a.video-title-text, .video-title a, .title a"
                 )
                 if title_el:
                     title = title_el.get("title") or title_el.get_text(strip=True)
-
-            # Fallback: title from thumb anchor's title attribute
             if not title:
-                title = a.get("title") or a.get("data-label2") or ""
+                title = (img.get("alt") if img else None) or a.get("title") or a.get("data-label2") or ""
 
-            # Duration
-            duration = "0:00"
-            container = card_parent or card
-            if container:
-                dur_el = container.select_one(".duration, .tm_video_duration, .video-duration")
-                if dur_el:
-                    duration = dur_el.get_text(strip=True)
-
-            # Views
-            views = "0"
-            if container:
-                v_el = container.select_one(".info-views, .views, .video_views")
-                if v_el:
-                    views = v_el.get_text(strip=True).replace("views", "").strip()
-
-            # Uploader
-            uploader = "Unknown"
-            if container:
-                u_el = container.select_one(".author-title-text, .username a, .uploader a")
-                if u_el:
-                    uploader = u_el.get_text(strip=True)
-
-            items.append({
-                "url": href,
-                "title": title or "Unknown",
-                "thumbnail_url": thumb,
-                "duration": duration,
-                "views": views,
-                "uploader_name": uploader,
-                "preview_url": thumb,
-            })
+            item = _make_item(href, title, thumb, card_parent or card)
+            if item:
+                items.append(item)
         except Exception:
             continue
 
+    # ── Layout B: category / sorted pages – a.tm_video_link ───────────────────
+    if not items:
+        for a in soup.select("a.tm_video_link"):
+            if len(items) >= limit:
+                break
+            try:
+                href = a.get("href", "")
+                thumb = None
+                img = a.find("img")
+                if img:
+                    thumb = img.get("data-src") or img.get("data-thumb_url") or img.get("src")
+
+                # Title is in img alt attribute
+                title = (img.get("alt") if img else None) or a.get("title") or ""
+
+                # Container for metadata = grandparent (div.video-box)
+                card = a.parent
+                container = card.parent if card else None
+
+                item = _make_item(href, title, thumb, container)
+                if item:
+                    items.append(item)
+            except Exception:
+                continue
+
     return items[:limit]
+
 
