@@ -223,7 +223,7 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
     fmt = "mp4"
     should_proxy = False
     referer = ""
-    if ".m3u8" in stream_url or "/media/hls/" in stream_url:
+    if ".m3u8" in stream_url:
         fmt = "hls"
         if selected_quality == "default":
             selected_quality = "adaptive"
@@ -295,9 +295,5 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         # Add qualities as flat fields in response
         for quality_label, quality_url in qualities.items():
             response[quality_label] = quality_url
-            
-        # USER REQUEST: Return raw media definitions if available (e.g. from Tube8 scraper)
-        if "media_definitions" in video_data:
-            return video_data["media_definitions"]
             
     return response
