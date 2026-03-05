@@ -332,6 +332,43 @@ async def direct_stream_endpoint(
         raise HTTPException(status_code=500, detail=f"Failed to fetch stream URL: {str(e)}")
 
 
+@api_v1_router.get("/videos/download", tags=["Streaming"])
+async def video_download_endpoint(request: Request, url: str = Query(..., description="Video page URL")):
+    """
+    Returns only MP4 download links for a given video URL.
+    Filters out HLS/adaptive streams.
+    """
+    from app.config.settings import settings
+    api_base = settings.BASE_URL or str(request.base_url)
+    try:
+        info = await get_video_info(url, api_base_url=api_base)
+        video_data = info.get("video", {})
+        streams = video_data.get("streams", [])
+        
+        # Filter for MP4 only
+        mp4_links = []
+        for s in streams:
+            fmt = s.get("format", "").lower()
+            stream_url = s.get("url", "")
+            if fmt == "mp4" or ".mp4" in stream_url.lower():
+                mp4_links.append({
+                    "quality": s.get("quality", "unknown"),
+                    "url": stream_url,
+                    "format": "mp4"
+                })
+        
+        return {
+            "status": "success",
+            "url": url,
+            "title": info.get("title"),
+            "downloads": mp4_links
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch download links: {str(e)}")
+
+
 # include routers
 api_v1_router.include_router(explore.router)
 api_v1_router.include_router(recommendations.router, prefix="/recommendations", tags=["AI Recommendations"])
