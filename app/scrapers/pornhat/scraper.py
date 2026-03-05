@@ -9,6 +9,9 @@ import httpx
 from bs4 import BeautifulSoup
 
 
+from app.core.pool import fetch_html as pool_fetch_html
+
+
 def can_handle(host: str) -> bool:
     host_lower = host.lower()
     return "pornhat.com" in host_lower
@@ -25,20 +28,7 @@ def get_categories() -> list[dict]:
 
 
 async def fetch_html(url: str) -> str:
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Referer": "https://www.pornhat.com/",
-    }
-    async with httpx.AsyncClient(
-        follow_redirects=True,
-        timeout=httpx.Timeout(30.0, connect=30.0),
-        headers=headers,
-    ) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        return resp.text
+    return await pool_fetch_html(url, headers={"Referer": "https://www.pornhat.com/"})
 
 
 def _extract_video_streams(html: str) -> dict[str, Any]:
