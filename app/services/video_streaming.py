@@ -267,7 +267,9 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
     if ("pornhub.com" in parsed_url.netloc.lower() or 
         "youporn.com" in parsed_url.netloc.lower() or
         "redtube.com" in parsed_url.netloc.lower() or
-        "redtube.net" in parsed_url.netloc.lower()):
+        "redtube.net" in parsed_url.netloc.lower() or
+        "tube8.com" in parsed_url.netloc.lower() or
+        "pornhat.com" in parsed_url.netloc.lower()):
         qualities = {}
         all_streams = video_data.get("streams", [])
         
@@ -278,17 +280,14 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
                 logger.info(f"  Stream {idx}: format={s.get('format')}, quality={s.get('quality')}, url={s.get('url')[:60]}...")
         
         for s in all_streams:
-            if s.get("format") == "hls":
-                quality_label = s.get("quality", "unknown")
+            # Include both HLS and MP4 for these sites to support both streaming and download options
+            quality_label = s.get("quality", "unknown")
+            
+            # Normalize quality label: ensure it has 'p' suffix (e.g., "720" -> "720p")
+            if quality_label and str(quality_label).isdigit():
+                quality_label = f"{quality_label}p"
                 
-                # Normalize quality label: ensure it has 'p' suffix (e.g., "720" -> "720p")
-                if quality_label and quality_label.isdigit():
-                    quality_label = f"{quality_label}p"
-                elif quality_label and not quality_label.endswith('p') and quality_label[:-1].isdigit():
-                    # Already has some suffix, keep as is
-                    pass
-                    
-                qualities[quality_label] = s.get("url")
+            qualities[quality_label] = s.get("url")
         
         if "redtube.com" in parsed_url.netloc.lower():
             logger.info(f"RedTube: Found {len(qualities)} HLS quality streams")
