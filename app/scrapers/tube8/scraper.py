@@ -209,33 +209,37 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
 
     def _make_item(href: str, title: str, thumb: str | None, container) -> dict | None:
         """Build a list item dict given the resolved fields and a container element for metadata."""
-        if not href or href in seen_hrefs:
+        if not href:
+            return None
+        
+        # Normalize URL for deduplication
+        if not href.startswith("http"):
+            href = "https://www.tube8.com" + ("/" if not href.startswith("/") else "") + href
+        href = href.split("?")[0].rstrip("/") # Simple normalization
+        
+        if href in seen_hrefs:
             return None
         seen_hrefs.add(href)
-
-        if not href.startswith("http"):
-            href = "https://www.tube8.com" + href
 
         # Duration
         duration = "0:00"
         if container is not None:
-            # Prefer sub-selectors first
             dur_el = container.select_one(".tm_video_duration, .video-duration, .duration, .video-duration-text")
             if dur_el:
-                duration = dur_el.get_text(strip=True)
+                txt = dur_el.get_text(strip=True)
+                if txt:
+                    duration = txt
 
         # Views
         views = "0"
         if container is not None:
             v_el = container.select_one(".info-views, .views, .video_views, .video-views-text")
             if v_el:
-                # Remove non-numeric garbage but keep K/M
                 raw_views = v_el.get_text(strip=True).lower()
-                # Use regex to find the first sequence that looks like a count (e.g. 1.2K)
                 v_match = re.search(r"(\d+[\d\.,]*[km]?)", raw_views)
                 if v_match:
                     views = v_match.group(1).upper()
-                else:
+                elif raw_views.strip():
                     views = raw_views.replace("views", "").strip()
 
         # Uploader
@@ -243,11 +247,12 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
         if container is not None:
             u_el = container.select_one(".author-title-text, .video-author-text, .username, .uploader")
             if not u_el:
-                # Fallback: find any link with /user/ in it
                 u_el = container.select_one('a[href*="/user/"], a[href*="/profiles/"]')
             
             if u_el:
-                uploader = u_el.get_text(strip=True)
+                txt = u_el.get_text(strip=True)
+                if txt:
+                    uploader = txt
 
         return {
             "url": href,
@@ -270,20 +275,21 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
             if img:
                 thumb = img.get("data-src") or img.get("data-thumb_url") or img.get("src")
 
-            # Title lives in sibling container
+            # Container for metadata is usually a parent div (video-card or item)
+            # The title often lives in a sibling but the container for _make_item should be the shared parent
             card = a.parent
-            card_parent = card.parent if card else None
+            # Some layouts have a wrapper around the link and info
+            if card and card.name != "div":
+                card = card.parent
+            
             title = ""
-            if card_parent:
-                title_el = card_parent.select_one(
-                    "a.video-title-text, .video-title a, .title a"
-                )
-                if title_el:
-                    title = title_el.get("title") or title_el.get_text(strip=True)
+            title_el = card.select_one("a.video-title-text, .video-title a, .title a") if card else None
+            if title_el:
+                title = title_el.get("title") or title_el.get_text(strip=True)
             if not title:
                 title = (img.get("alt") if img else None) or a.get("title") or a.get("data-label2") or ""
 
-            item = _make_item(href, title, thumb, card_parent or card)
+            item = _make_item(href, title, thumb, card)
             if item:
                 items.append(item)
         except Exception:
@@ -301,14 +307,19 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 100) -> list[di
                 if img:
                     thumb = img.get("data-src") or img.get("data-thumb_url") or img.get("src")
 
-                # Title is in img alt attribute
-                title = (img.get("alt") if img else None) or a.get("title") or ""
-
-                # Container for metadata = grandparent (div.video-box)
+                # Title is in img alt attribute or a video-title link
                 card = a.parent
-                container = card.parent if card else None
+                if card and card.name != "div":
+                    card = card.parent
+                
+                title = ""
+                title_el = card.select_one(".video-title-text, .tm_video_title") if card else None
+                if title_el:
+                    title = title_el.get("title") or title_el.get_text(strip=True)
+                if not title:
+                    title = (img.get("alt") if img else None) or a.get("title") or ""
 
-                item = _make_item(href, title, thumb, container)
+                item = _make_item(href, title, thumb, card)
                 if item:
                     items.append(item)
             except Exception:
