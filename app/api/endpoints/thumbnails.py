@@ -25,12 +25,13 @@ async def thumbnail_proxy(
     is_youporn = "ypncdn.com" in url_lower or "youporn.com" in url_lower
     is_pornhub = "phncdn.com" in url_lower or "pornhub.com" in url_lower
     is_redtube = "rdtcdn.com" in url_lower or "redtube.com" in url_lower
+    is_tube8 = "t8cdn.com" in url_lower or "tube8.com" in url_lower
     
-    if not (is_hqporner or is_youporn or is_pornhub or is_redtube):
+    if not (is_hqporner or is_youporn or is_pornhub or is_redtube or is_tube8):
         raise HTTPException(status_code=403, detail="Only allowed domains are supported")
         
-    if (is_youporn or is_pornhub or is_redtube) and "/plain/" not in url_lower:
-        raise HTTPException(status_code=403, detail="Only YouPorn/Pornhub/RedTube dynamic /plain/ previews are allowed via proxy")
+    if (is_youporn or is_pornhub or is_redtube or is_tube8) and "/plain/" not in url_lower:
+        raise HTTPException(status_code=403, detail="Only YouPorn/Pornhub/RedTube/Tube8 dynamic /plain/ previews are allowed via proxy")
     
     # Headers to send to upstream
     headers = {}
@@ -51,6 +52,8 @@ async def thumbnail_proxy(
             headers["Referer"] = "https://www.pornhub.com/"
         elif is_redtube:
             headers["Referer"] = "https://www.redtube.com/"
+        elif is_tube8:
+            headers["Referer"] = "https://www.tube8.com/"
 
     try:
         # Use a single-use client for simplicity, though a pooled one is better for high volume
@@ -91,11 +94,12 @@ def wrap_thumbnail_url(url: str, api_base_url: str) -> str:
     is_youporn = "ypncdn.com" in url_lower or "youporn.com" in url_lower
     is_pornhub = "phncdn.com" in url_lower or "pornhub.com" in url_lower
     is_redtube = "rdtcdn.com" in url_lower or "redtube.com" in url_lower
+    is_tube8 = "t8cdn.com" in url_lower or "tube8.com" in url_lower
     
-    if not (is_hqporner or is_youporn or is_pornhub or is_redtube):
+    if not (is_hqporner or is_youporn or is_pornhub or is_redtube or is_tube8):
         return url
         
-    if is_youporn or is_pornhub or is_redtube:
+    if is_youporn or is_pornhub or is_redtube or is_tube8:
         # Only proxy dynamic previews (which contain /plain/ and require IP-bound validto tokens)
         # Leave standard static .jpg thumbnails unproxied to save backend bandwidth
         if "/plain/" not in url_lower:
