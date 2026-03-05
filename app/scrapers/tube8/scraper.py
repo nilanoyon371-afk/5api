@@ -48,21 +48,24 @@ def _extract_video_streams(html: str) -> dict[str, Any]:
     streams: list[dict] = []
     hls_url = None
 
-    # Try page_params (Tube8/RedTube standard) first, then flashvars as fallback
-    m = re.search(r"mediaDefinitions[\"']?\s*:\s*(\[.*?\])", html, re.DOTALL)
-    if not m:
-        m = re.search(r"var\s+page_params\s*=\s*(\{.*?\});", html, re.DOTALL)
+    # Try page_params (Tube8 standard)
+    m = re.search(r"var\s+page_params\s*=\s*(\{.*?\});", html, re.DOTALL)
 
     if m:
         try:
             raw = m.group(1)
-            if raw.startswith("["):
-                data = json.loads(raw)
-            else:
-                full = json.loads(raw)
-                data = full.get("mediaDefinitions", [])
-                if not data and "video" in full:
-                    data = full["video"].get("mediaDefinitions", [])
+            full = json.loads(raw)
+            
+            # Navigate to mediaDefinitions: page_params -> video_player_setup -> playervars -> mediaDefinitions
+            setup = full.get("video_player_setup", {})
+            playervars = setup.get("playervars", {})
+            data = playervars.get("mediaDefinitions", [])
+            
+            if not data:
+                # Fallback to general mediaDefinitions search
+                m_alt = re.search(r"mediaDefinitions[\"']?\s*:\s*(\[.*?\])", html, re.DOTALL)
+                if m_alt:
+                    data = json.loads(m_alt.group(1))
 
             for md in data:
                 video_url = md.get("videoUrl")

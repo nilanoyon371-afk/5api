@@ -51,51 +51,54 @@ def _extract_video_streams(html: str) -> dict[str, Any]:
     streams: list[dict] = []
     hls_url = None
 
-    # Pattern 1: jwplayer "sources" config array
-    m = re.search(r"sources\s*:\s*(\[.*?\])", html, re.DOTALL)
-    if m:
-        try:
-            src_list = json.loads(m.group(1))
-            for item in src_list:
-                file_url = item.get("file") or item.get("src") or item.get("url") or ""
-                label = item.get("label") or item.get("res") or item.get("quality") or ""
-                if not file_url:
-                    continue
-                fmt = "hls" if ".m3u8" in file_url else "mp4"
-                q = str(label).replace("p", "").strip()
-                if q.isdigit():
-                    q = f"{q}p"
-                else:
-                    q = label or "unknown"
-                stream = {"quality": q, "url": file_url, "format": fmt}
-                if fmt == "hls":
-                    hls_url = hls_url or file_url
-                streams.append(stream)
-        except Exception:
-            pass
-
-    # Pattern 2: "file": "..." scattered JSON
-    if not streams:
-        for fm in re.finditer(r'"file"\s*:\s*"(https?://[^"]+\.(?:mp4|m3u8)[^"]*)"', html):
-            file_url = fm.group(1)
-            fmt = "hls" if ".m3u8" in file_url else "mp4"
-            # Try to extract quality from URL
-            mq = re.search(r"(\d{3,4})[pP]", file_url)
-            quality = f"{mq.group(1)}p" if mq else "unknown"
-            streams.append({"quality": quality, "url": file_url, "format": fmt})
+    # Pattern 1: HTML <video> source tags (Most reliable now)
+    soup = BeautifulSoup(html, "lxml")
+    video_el = soup.select_one("video")
+    if video_el:
+        source_tags = video_el.find_all("source")
+        for tag in source_tags:
+            src = tag.get("src")
+            if not src:
+                continue
+            
+            # Normalize URL if needed
+            if src.startswith("//"):
+                src = "https:" + src
+            elif src.startswith("/"):
+                src = "https://www.pornhat.com" + src
+                
+            label = tag.get("label") or tag.get("title") or ""
+            mq = re.search(r"(\d{3,4})[pP]", src)
+            quality = f"{mq.group(1)}p" if mq else (label or "default")
+            
+            fmt = "hls" if ".m3u8" in src else "mp4"
+            streams.append({"quality": quality, "url": src, "format": fmt})
             if fmt == "hls":
-                hls_url = hls_url or file_url
+                hls_url = hls_url or src
 
-    # Pattern 3: raw mp4/m3u8 URLs embedded in JS variable assignments
+    # Pattern 2: jwplayer "sources" config array (Fallback)
     if not streams:
-        for fm in re.finditer(r"(?:video_url|videoUrl)\s*[=:]\s*['\"]?(https?://[^'\"]+\.(?:mp4|m3u8)[^'\"]*)", html):
-            file_url = fm.group(1)
-            fmt = "hls" if ".m3u8" in file_url else "mp4"
-            mq = re.search(r"(\d{3,4})[pP]", file_url)
-            quality = f"{mq.group(1)}p" if mq else "default"
-            streams.append({"quality": quality, "url": file_url, "format": fmt})
-            if fmt == "hls":
-                hls_url = hls_url or file_url
+        m = re.search(r"sources\s*:\s*(\[.*?\])", html, re.DOTALL)
+        if m:
+            try:
+                src_list = json.loads(m.group(1))
+                for item in src_list:
+                    file_url = item.get("file") or item.get("src") or item.get("url") or ""
+                    label = item.get("label") or item.get("res") or item.get("quality") or ""
+                    if not file_url:
+                        continue
+                    fmt = "hls" if ".m3u8" in file_url else "mp4"
+                    q = str(label).replace("p", "").strip()
+                    if q.isdigit():
+                        q = f"{q}p"
+                    else:
+                        q = label or "unknown"
+                    stream = {"quality": q, "url": file_url, "format": fmt}
+                    if fmt == "hls":
+                        hls_url = hls_url or file_url
+                    streams.append(stream)
+            except Exception:
+                pass
 
     # Sort descending by quality
     def _qval(s: dict) -> int:
