@@ -211,12 +211,21 @@ async def scrape(url: str) -> dict[str, Any]:
 async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dict[str, Any]]:
     """List videos from an HQPorner listing/category page."""
     url = base_url.rstrip("/")
-
-    # Pagination: append /page_number for pages > 1
     if page > 1:
-        # Category pages: /category/name/2
-        # Home/top: /hdporn/2 or /top/2
-        url = f"{url}/{page}"
+        if "?" in url:
+            # Search results: ?q=query&p=2
+            if "p=" in url:
+                url = re.sub(r'([?&]p=)\d+', r'\g<1>' + str(page), url)
+            else:
+                separator = "&" if "?" in url else "?"
+                url = f"{url}{separator}p={page}"
+        elif url == "https://hqporner.com" or url == "http://hqporner.com":
+            # Home page pagination
+            url = f"{url}/hdporn/{page}"
+        else:
+            # Categories: /category/name/2
+            # Also handles /hdporn/2 or /top/2 if base_url already includes the segment
+            url = f"{url}/{page}"
 
     try:
         html = await fetch_html(url)
