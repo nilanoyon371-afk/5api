@@ -177,7 +177,7 @@ EXPLORE_SOURCES = [
         category="free",
         isVerified=False,
         hasCategories=True,
-        searchUrlTemplate="",
+        searchUrlTemplate="https://www.pornwex.tv/search/{query}/",
         sourceId="pornwex",
         disable=False,
     ),
