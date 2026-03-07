@@ -20,14 +20,15 @@ async def fetch_html(url: str) -> str:
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
     }
-    resp = await pool.client.get(url, headers=headers, follow_redirects=True)
-    resp.raise_for_status()
-    
-    # Check if a paginated request was redirected to the base URL (meaning no more pages)
-    if "/page/" in url and "/page/" not in str(resp.url):
-        return ""
+    session = await pool.get_session()
+    async with session.get(url, headers=headers, allow_redirects=True) as resp:
+        resp.raise_for_status()
         
-    return resp.text
+        # Check if a paginated request was redirected to the base URL (meaning no more pages)
+        if "/page/" in url and "/page/" not in str(resp.url):
+            return ""
+            
+        return await resp.text()
 
 
 def _text(el: Any) -> Optional[str]:
@@ -217,11 +218,11 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
     elif not target_url.endswith("/") and "?" not in target_url:
         target_url += "/"
 
-    import httpx
+    import aiohttp
     try:
         html = await fetch_html(target_url)
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
             return []
         raise
 

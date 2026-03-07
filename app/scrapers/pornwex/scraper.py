@@ -20,9 +20,10 @@ async def fetch_html(url: str) -> str:
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
     }
-    resp = await pool.client.get(url, headers=headers, follow_redirects=True)
-    resp.raise_for_status()
-    return resp.text
+    session = await pool.get_session()
+    async with session.get(url, headers=headers, allow_redirects=True) as resp:
+        resp.raise_for_status()
+        return await resp.text()
 
 
 def _text(el: Any) -> Optional[str]:
@@ -72,16 +73,17 @@ async def _follow_to_direct_url(get_file_url: str) -> str:
         "Referer": "https://www.pornwex.tv/",
     }
     try:
-        resp = await pool.client.get(
+        session = await pool.get_session()
+        async with session.get(
             get_file_url,
             headers=headers,
-            follow_redirects=True,
-        )
-        # The final URL after redirects is the signed CDN link
-        final = str(resp.url)
-        # Only accept if it looks like a real media URL
-        if any(x in final for x in ("remote_control", ".mp4", ".m3u8")):
-            return final
+            allow_redirects=True,
+        ) as resp:
+            # The final URL after redirects is the signed CDN link
+            final = str(resp.url)
+            # Only accept if it looks like a real media URL
+            if any(x in final for x in ("remote_control", ".mp4", ".m3u8")):
+                return final
     except Exception:
         pass
     # Fallback: return the get_file URL itself
@@ -375,14 +377,15 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
                 "X-Requested-With": "XMLHttpRequest",
                 "Referer": target_url + "/",
             }
-            resp = await pool.client.post(
+            session = await pool.get_session()
+            async with session.post(
                 target_url + "/",
                 data=post_data,
                 headers=headers,
-                follow_redirects=True,
-            )
-            resp.raise_for_status()
-            html = resp.text
+                allow_redirects=True,
+            ) as resp:
+                resp.raise_for_status()
+                html = await resp.text()
     else:
         if page > 1:
             if target_url in ("https://www.pornwex.tv", "https://pornwex.tv"):
