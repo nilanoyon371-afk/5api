@@ -218,6 +218,7 @@ EXPLORE_SOURCES = [
         searchUrlTemplate="https://brazzpw.com/search/free-brazz-premium-full-new-jan-2026/?s={query}",
         sourceId="brazzpw",
         disable=False,
+        pageSize=100,
     ),
     ExploreSourceResponse(
         baseUrl="https://www.gosexpod.com/",
