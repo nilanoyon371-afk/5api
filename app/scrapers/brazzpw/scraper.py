@@ -30,7 +30,22 @@ async def scrape(url: str) -> dict:
     html = await fetch_html(url)
     soup = BeautifulSoup(html, 'lxml')
     
-    title = soup.find('h1').get_text(strip=True) if soup.find('h1') else ""
+    title_el = soup.find('h1')
+    title = title_el.get_text(strip=True) if title_el else ""
+    upload_date = None
+    
+    # Try to extract title and date from entry-header if h1 is not sufficient
+    header = soup.find('header', class_='entry-header')
+    if header:
+        header_text = header.get_text(strip=True)
+        # Pattern to match: Mar 03: More! More! More!
+        match = re.search(r'([A-Z][a-z]{2}\s\d{2}):\s*(.*)', header_text)
+        if match:
+            upload_date = match.group(1)
+            title = match.group(2)
+        elif not title:
+            title = header_text
+
     thumbnail = ""
     meta_img = soup.find('meta', property='og:image')
     if meta_img:
@@ -122,6 +137,7 @@ async def scrape(url: str) -> dict:
         "duration": None,
         "views": None,
         "uploader_name": "BrazzPW",
+        "upload_date": upload_date,
         "video": {
             "streams": [{"quality": "720p", "url": video_url, "format": "mp4"}] if video_url else [],
             "hls": hls_url,

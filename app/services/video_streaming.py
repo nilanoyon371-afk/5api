@@ -177,6 +177,7 @@ async def get_video_info(url: str, api_base_url: str = "http://localhost:8000") 
             "uploader_name": metadata.get("uploader_name"),
             "category": metadata.get("category"),
             "tags": metadata.get("tags", []),
+            "upload_date": metadata.get("upload_date"),
             "related_videos": metadata.get("related_videos", []),
             "preview_url": metadata.get("preview_url"),
             "video": video_data,
