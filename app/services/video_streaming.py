@@ -302,6 +302,8 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
         "redtube.com" in parsed_url.netloc.lower() or
         "redtube.net" in parsed_url.netloc.lower() or
         "tube8.com" in parsed_url.netloc.lower() or
+        "xxxparodyhd.net" in parsed_url.netloc.lower() or
+        "xparody.com" in parsed_url.netloc.lower() or
         "pornhat.com" in parsed_url.netloc.lower()):
         qualities = {}
         all_streams = video_data.get("streams", [])
@@ -318,6 +320,7 @@ async def get_stream_url(url: str, quality: str = "default", api_base_url: str =
                 continue
 
             # Include both HLS and MP4 for these sites to support both streaming and download options
+            # Also include 'embed' format for sites like xxxparodyhd
             quality_label = s.get("quality", "unknown")
             
             # Normalize quality label: ensure it has 'p' suffix (e.g., "720" -> "720p")
