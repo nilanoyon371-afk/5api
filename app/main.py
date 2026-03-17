@@ -4,6 +4,7 @@ import httpx
 from datetime import datetime
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import starlette.exceptions
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -55,7 +56,6 @@ app.add_exception_handler(500, internal_error_handler)
 app.add_exception_handler(StarletteHTTPException, general_exception_handler)
 app.add_exception_handler(HTTPException, general_exception_handler)
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -63,6 +63,9 @@ app.add_middleware(
     allow_methods=settings.CORS_ALLOW_METHODS,
     allow_headers=settings.CORS_ALLOW_HEADERS,
 )
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # app.middleware("http")(rate_limit_middleware)
 
