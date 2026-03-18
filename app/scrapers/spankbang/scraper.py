@@ -260,8 +260,8 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
     # The container with the most items is the Main List.
     container_selector = ".js-video-item, .video-item, .video-list-video, [data-testid='video-item']"
     
-    # Target only the main content area to avoid featured items in the header on subsequent pages
-    if page == 1:
+    # Include featured header ONLY on trending videos page 1.
+    if page == 1 and (url.rstrip("/") == "https://spankbang.com/trending_videos" or url.rstrip("/") == "https://spankbang.com"):
         # Include all video items, including featured items in the header (the top 6 videos).
         selected_items = soup.select(container_selector)
     else:
