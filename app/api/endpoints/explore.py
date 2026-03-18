@@ -160,7 +160,7 @@ EXPLORE_SOURCES = [
     ExploreSourceResponse(
         baseUrl="https://xxxparodyhd.net/",
         nickname="XXXParodyHD",
-        favicon="https://xxxparodyhd.net/wp-content/uploads/2020/09/cropped-xxxparodyhd-192x192.png",
+        favicon="https://raw.githubusercontent.com/milon4999/apphub-release/refs/heads/main/logo/xxx.png",
         accentColor="#E040FB",
         category="free",
         isVerified=False,
