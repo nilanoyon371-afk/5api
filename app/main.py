@@ -403,13 +403,6 @@ async def get_notifications():
             message="Thank you for using our app! Stay tuned for more features.",
             type="info",
             created_at=datetime.now()
-        ),
-        NotificationItem(
-            id="2",
-            title="Direct Downloads Added",
-            message="You can now download videos directly from PornXP, XVideos, Masa, XHamster, XNXX, RedTube, and YouPorn!",
-            type="success",
-            created_at=datetime.now()
         )
     ]
     return NotificationResponse(
