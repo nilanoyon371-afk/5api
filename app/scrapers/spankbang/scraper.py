@@ -260,21 +260,17 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
     # The container with the most items is the Main List.
     container_selector = ".js-video-item, .video-item, .video-list-video, [data-testid='video-item']"
     
-    # Include featured header ONLY on trending videos page 1.
-    if page == 1 and (url.rstrip("/") == "https://spankbang.com/trending_videos" or url.rstrip("/") == "https://spankbang.com"):
-        # Include all video items, including featured items in the header (the top 6 videos).
-        selected_items = soup.select(container_selector)
+    # Target only the main content area to avoid featured items in the header
+    main_content = soup.select_one('main[data-testid="main"]')
+    if main_content:
+        selected_items = main_content.select(container_selector)
     else:
-        main_content = soup.select_one('main[data-testid="main"]')
-        if main_content:
-            selected_items = main_content.select(container_selector)
-        else:
-            selected_items = soup.select(container_selector)
+        selected_items = soup.select(container_selector)
     
     for item in selected_items:
         try:
-            # Get the main link (usually a.thumb for thumbnail)
-            link = item.select_one("a")
+            # Get the main link (usually a.thumb for thumbnail or the first big anchor)
+            link = item.select_one('a[href*="/video/"], a')
             if not link: continue
             
             href = link.get("href")
@@ -282,12 +278,15 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
              
             if href.startswith("/"): href = "https://spankbang.com" + href
             
-            # Title: look for the title link in the info section
+            # Title: Improved selector to avoid matching hashtags/channels
             title = "Unknown"
-            # In new layout, title is in a p -> a -> span
-            title_tag = item.select_one('p a span, .n')
+            # Title is typically in a p tag with specific classes
+            title_tag = item.select_one('p a[href*="/video/"] span, p a[href*="/video/"], .n')
             if title_tag:
                 title = title_tag.get_text(strip=True)
+            
+            # Clean Title: Remove common redundant prefixes
+            title = re.sub(r'^(\(None\)|（無）|\(無\))\s*', '', title, flags=re.IGNORECASE).strip()
 
             # Thumbnail
             img = item.find("img")
@@ -309,13 +308,16 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
             views = "0"
             views_tag = item.select_one('[data-testid="views"]')
             if views_tag:
-                # Often views are in a nested span with md:text-body-md class
-                views_text_tag = views_tag.select_one('span.md\\:text-body-md, span:last-child')
-                views = (views_text_tag or views_tag).get_text(strip=True)
+                # The view count is usually in the last span or the one with text
+                # We can just get all text and strip whitespace, BS4 will handle nested spans
+                views = views_tag.get_text(strip=True)
             
-            # Uploader: Often uses data-testid="title" for the user/pornstar link
+            # Uploader: Use data-testid="title" for the user/pornstar link carefully
+            # Note: Spankbang uses data-testid="title" for tags/channels too.
+            # Usually the user/channel link does NOT have /video/ in href.
             uploader = "Unknown"
-            uploader_tag = item.select_one('[data-testid="title"] span, span.text-action-tertiary')
+            # Try to find a link that is NOT a video link but has uploader classes
+            uploader_tag = item.select_one('a[href^="/s/"]:not([href*="video"]), a[href^="/profile/"], span.text-action-tertiary')
             if uploader_tag:
                 uploader = uploader_tag.get_text(strip=True)
             
