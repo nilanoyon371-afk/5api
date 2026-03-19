@@ -545,118 +545,185 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    for a in soup.select('a[href*="/videos/"]'):
-        href = a.get("href")
-        if not href:
-            continue
-
-        if "/videos/" not in href:
-            continue
-
+    # Attempt to extract from window.initials
+    initials_match = re.search(r"window\.initials\s*=\s*({.+?});", html, re.DOTALL)
+    video_props = []
+    if initials_match:
         try:
-            abs_url = str(base_uri.join(href))
+            data = json.loads(initials_match.group(1))
+            
+            # Possible paths for videoThumbProps
+            paths = [
+                data.get("layoutPage", {}).get("videoListProps", {}).get("videoThumbProps", []),
+                data.get("layoutPage", {}).get("trendingVideoListProps", {}).get("videoThumbProps", []),
+                data.get("searchResult", {}).get("videoThumbProps", []),
+                data.get("pagesCategoryComponent", {}).get("trendingVideoListProps", {}).get("videoThumbProps", []),
+                data.get("pagesCategoryComponent", {}).get("videoListProps", {}).get("videoThumbProps", []),
+            ]
+            for val in paths:
+                if isinstance(val, list) and val:
+                    video_props = val
+                    break
         except Exception:
-            continue
+            pass
 
-        if abs_url in seen:
-            continue
-
-        img = a.find("img")
-        thumb = _best_image_url(img)
-
-        # Try to find a specific title element first
-        title_el = a.find(class_=re.compile(r"video-thumb-info__name"))
-        title = _first_non_empty(
-            _text(title_el),
-            img.get("alt") if img else None,
-            a.get("title"),
-            _text(a),  # Fallback to the original broad search
-        )
-
-        duration = _find_duration_like_text(a)
-
-        # Extract metadata from the video card or its parent container
-        # Be conservative - only look at the anchor and its immediate parent/siblings
-        # to avoid matching page-level elements
-        card = a.parent if hasattr(a, 'parent') and a.parent else a
-
-        # Extract views
-        views = None
-        views_el = card.find(class_=re.compile(r"video-thumb-views|video-thumb-info__views|entity-views-container__value"))
-        if views_el:
-            views_text = _text(views_el)
-            if views_text:
-                # Clean up the views text (e.g., "1.2M views" -> "1.2M")
-                views = re.sub(r"\s*views?\s*$", "", views_text, flags=re.IGNORECASE).strip()
-
-        # Extract uploader name with avatar
-        uploader_name = None
-        uploader_avatar_url = None
-        
-        uploader_el = card.find(class_=re.compile(r"video-uploader__name|video-thumb-uploader__name|video-user-info__name"))
-        if not uploader_el:
-             # Try finding uploader link within the card only
-            uploader_link = card.find('a', href=re.compile(r"/users/|/channels/|/creators/|/pornstars/"))
-            if uploader_link:
-                uploader_name = _text(uploader_link)
-        else:
-            uploader_name = _text(uploader_el)
-            uploader_link = uploader_el
+    if video_props:
+        for vid in video_props:
+            url = vid.get("pageURL")
+            if not url:
+                continue
+                
+            try:
+                abs_url = str(base_uri.join(url))
+            except Exception:
+                continue
+                
+            if abs_url in seen:
+                continue
+                
+            seen.add(abs_url)
             
-        # Fallback if xHamster censors the name with "*******" for certain IP ranges
-        if uploader_name and ("*" in uploader_name or uploader_name.strip() == ""):
-            uploader_name = None
+            thumb = vid.get("thumbURL") or vid.get("imageURL")
             
-        if not uploader_name and uploader_link:
-            href = uploader_link.get("href", "")
-            if href:
-                parts = [p for p in href.split("/") if p and "?" not in p]
-                if parts:
-                    uploader_name = parts[-1].replace("-", " ").title()
+            duration_val = vid.get("duration")
+            duration_str = None
+            if isinstance(duration_val, (int, float)):
+                duration_val = int(duration_val)
+                mins, secs = divmod(duration_val, 60)
+                hours, mins = divmod(mins, 60)
+                if hours > 0:
+                    duration_str = f"{hours}:{mins:02d}:{secs:02d}"
+                else:
+                    duration_str = f"{mins}:{secs:02d}"
+
+            views_val = vid.get("views")
+            views_str = str(views_val) if views_val is not None else None
             
-        # Extract uploader logo/avatar
-        # Typical classes: video-uploader-logo, video-thumb-uploader__logo, etc.
-        logo_el = card.find(class_=re.compile(r"video-uploader-logo|video-thumb-uploader__logo|video-user-info__avatar"))
-        if logo_el:
-            # Check for data-background-image first (often used for avatars)
-            bg_img = logo_el.get("data-background-image")
-            if bg_img:
-                uploader_avatar_url = str(bg_img).strip()
-            elif logo_el.name == 'img':
-                uploader_avatar_url = _best_image_url(logo_el)
-            else:
-                img_in_logo = logo_el.find('img')
-                if img_in_logo:
-                     uploader_avatar_url = _best_image_url(img_in_logo)
-        
-        # If still no avatar, try checking the uploader link for an image
-        if not uploader_avatar_url:
-             uploader_link = card.find('a', href=re.compile(r"/users/|/channels/"))
-             if uploader_link:
-                 img = uploader_link.find('img')
-                 if img:
-                     # Check if it looks like an avatar (often small or specific class)
-                     if "avatar" in str(img.get("class", "")) or "logo" in str(img.get("class", "")):
-                         uploader_avatar_url = _best_image_url(img)
-
-        # If no thumbnail, skip (usually not a card)
-        if not thumb:
-            continue
-
-        seen.add(abs_url)
-        items.append(
-            {
+            landing = vid.get("landing") or {}
+            uploader_name = landing.get("name") if isinstance(landing, dict) else None
+            uploader_avatar_url = landing.get("logo") if isinstance(landing, dict) else None
+            
+            items.append({
                 "url": abs_url,
-                "title": title,
+                "title": vid.get("title"),
                 "thumbnail_url": thumb,
-                "duration": duration,
-                "views": views,
+                "duration": duration_str,
+                "views": views_str,
                 "uploader_name": uploader_name,
                 "uploader_avatar_url": uploader_avatar_url,
-            }
-        )
-
-
+            })
+    else:
+        # Fallback to DOM parsing
+        for a in soup.select('a[href*="/videos/"]'):
+            href = a.get("href")
+            if not href:
+                continue
+    
+            if "/videos/" not in href:
+                continue
+    
+            try:
+                abs_url = str(base_uri.join(href))
+            except Exception:
+                continue
+    
+            if abs_url in seen:
+                continue
+    
+            img = a.find("img")
+            thumb = _best_image_url(img)
+    
+            # Try to find a specific title element first
+            title_el = a.find(class_=re.compile(r"video-thumb-info__name"))
+            title = _first_non_empty(
+                _text(title_el),
+                img.get("alt") if img else None,
+                a.get("title"),
+                _text(a),  # Fallback to the original broad search
+            )
+    
+            duration = _find_duration_like_text(a)
+    
+            # Extract metadata from the video card or its parent container
+            # Be conservative - only look at the anchor and its immediate parent/siblings
+            # to avoid matching page-level elements
+            card = a.parent if hasattr(a, 'parent') and a.parent else a
+    
+            # Extract views
+            views = None
+            views_el = card.find(class_=re.compile(r"video-thumb-views|video-thumb-info__views|entity-views-container__value"))
+            if views_el:
+                views_text = _text(views_el)
+                if views_text:
+                    # Clean up the views text (e.g., "1.2M views" -> "1.2M")
+                    views = re.sub(r"\s*views?\s*$", "", views_text, flags=re.IGNORECASE).strip()
+    
+            # Extract uploader name with avatar
+            uploader_name = None
+            uploader_avatar_url = None
+            
+            uploader_el = card.find(class_=re.compile(r"video-uploader__name|video-thumb-uploader__name|video-user-info__name"))
+            if not uploader_el:
+                 # Try finding uploader link within the card only
+                uploader_link = card.find('a', href=re.compile(r"/users/|/channels/|/creators/|/pornstars/"))
+                if uploader_link:
+                    uploader_name = _text(uploader_link)
+            else:
+                uploader_name = _text(uploader_el)
+                uploader_link = uploader_el
+                
+            # Fallback if xHamster censors the name with "*******" for certain IP ranges
+            if uploader_name and ("*" in uploader_name or uploader_name.strip() == ""):
+                uploader_name = None
+                
+            if not uploader_name and uploader_link:
+                href = uploader_link.get("href", "")
+                if href:
+                    parts = [p for p in href.split("/") if p and "?" not in p]
+                    if parts:
+                        uploader_name = parts[-1].replace("-", " ").title()
+                
+            # Extract uploader logo/avatar
+            # Typical classes: video-uploader-logo, video-thumb-uploader__logo, etc.
+            logo_el = card.find(class_=re.compile(r"video-uploader-logo|video-thumb-uploader__logo|video-user-info__avatar"))
+            if logo_el:
+                # Check for data-background-image first (often used for avatars)
+                bg_img = logo_el.get("data-background-image")
+                if bg_img:
+                    uploader_avatar_url = str(bg_img).strip()
+                elif logo_el.name == 'img':
+                    uploader_avatar_url = _best_image_url(logo_el)
+                else:
+                    img_in_logo = logo_el.find('img')
+                    if img_in_logo:
+                         uploader_avatar_url = _best_image_url(img_in_logo)
+            
+            # If still no avatar, try checking the uploader link for an image
+            if not uploader_avatar_url:
+                 uploader_link = card.find('a', href=re.compile(r"/users/|/channels/"))
+                 if uploader_link:
+                     img = uploader_link.find('img')
+                     if img:
+                         # Check if it looks like an avatar (often small or specific class)
+                         if "avatar" in str(img.get("class", "")) or "logo" in str(img.get("class", "")):
+                             uploader_avatar_url = _best_image_url(img)
+    
+            # If no thumbnail, skip (usually not a card)
+            if not thumb:
+                continue
+    
+            seen.add(abs_url)
+            items.append(
+                {
+                    "url": abs_url,
+                    "title": title,
+                    "thumbnail_url": thumb,
+                    "duration": duration,
+                    "views": views,
+                    "uploader_name": uploader_name,
+                    "uploader_avatar_url": uploader_avatar_url,
+                }
+            )
 
     return items
 
