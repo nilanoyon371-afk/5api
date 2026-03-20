@@ -22,13 +22,14 @@ async def hls_proxy(
     """
     Proxy HLS manifests and segments to bypass CORS/Referer restrictions.
     Rewrites URLs in m3u8 files to point back to this proxy.
+    Streams video chunks efficiently without memory buffering.
     Handles BrazzPW-style meta-refreshes and masked MIME types.
     """
     if not url:
         raise HTTPException(status_code=400, detail="Missing URL")
     
     headers = {}
-    ua = user_agent if user_agent else request.headers.get("user-agent")
+    ua = user_agent if user_agent else request.headers.get("user-agent", "Mozilla/5.0")
     if ua:
         headers["User-Agent"] = ua
     if referer:
@@ -41,107 +42,108 @@ async def hls_proxy(
         headers["Range"] = range_header
         
     try:
-        # Use a session-like client to handle potential cookies from meta-refreshes
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as client:
-            current_url = url
-            resp = await client.get(current_url)
-            
-            # 1. Handle Meta-Refresh or session initialization (common in BrazzPW)
-            # BrazzPW might return a 403 with HTML containing a meta-refresh
-            content_type = resp.headers.get("content-type", "").lower()
-            is_html = "text/html" in content_type
-            
-            if (resp.status_code == 403 or is_html) and ("#EXTM3U" not in resp.text):
-                # Try following meta refresh if present
+        from starlette.background import BackgroundTask
+        
+        client = httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0)
+        req = client.build_request("GET", url)
+        resp = await client.send(req, stream=True)
+        
+        # 1. Handle Meta-Refresh or session initialization (common in BrazzPW manifests)
+        content_type = resp.headers.get("content-type", "").lower()
+        is_html = "text/html" in content_type
+        
+        url_lower = url.lower()
+        is_manifest = "mpegurl" in content_type or url_lower.endswith(".m3u8") or ".m3u8" in url_lower
+
+        if (resp.status_code == 403 or is_html) and is_manifest:
+            await resp.aread() # We must read the body to check for meta-refresh
+            if "#EXTM3U" not in resp.text:
                 m = re.search(r'url=([^"\']*)', resp.text, re.I)
                 if m:
-                    refresh_url = urljoin(current_url, m.group(1))
+                    refresh_url = urljoin(url, m.group(1))
                     logger.info(f"Following meta-refresh to: {refresh_url}")
-                    await client.get(refresh_url) # Just visit it to get cookies
-                    resp = await client.get(current_url) # Retry original
+                    await client.get(refresh_url) # Hit to get cookies
+                    resp = await client.send(req, stream=True) # Retry original stream
                 else:
-                    # Some sites just need a second hit to set/use cookies
                     logger.info("Retrying request to handle potential session initialization...")
-                    resp = await client.get(current_url)
+                    resp = await client.send(req, stream=True)
             
-            if resp.status_code >= 400:
-                raise HTTPException(status_code=resp.status_code, detail=f"Upstream error: {resp.status_code}")
-            
+            # Re-evaluate content type after refresh
             content_type = resp.headers.get("content-type", "").lower()
-            url_lower = url.lower()
-            
-            # 2. Manifest Rewriting
-            if "mpegurl" in content_type or url_lower.endswith(".m3u8") or ".m3u8" in url_lower:
-                content = resp.text
-                base_url = str(request.base_url).rstrip("/")
-                proxy_base = f"{base_url}/api/v1/hls/proxy"
-                
-                lines = content.split('\n')
-                new_lines = []
-                for line in lines:
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        # Handle URI attributes in tags
-                        if line.startswith("#EXT-X-KEY") and 'URI="' in line:
-                            # TODO: Implement URI attribute rewriting if needed
-                            new_lines.append(line)
-                        else:
-                            new_lines.append(line)
-                    else:
-                        # It's a URI line
-                        target = urljoin(current_url, line)
-                        params = f"?url={quote(target)}"
-                        if referer: params += f"&referer={quote(referer)}"
-                        if origin: params += f"&origin={quote(origin)}"
-                        if user_agent: params += f"&user_agent={quote(user_agent)}"
-                        new_lines.append(f"{proxy_base}{params}")
-                
-                return Response(
-                    content="\n".join(new_lines),
-                    media_type="application/vnd.apple.mpegurl",
-                    headers={"Access-Control-Allow-Origin": "*"}
-                )
-            
-            # 3. Segment Streaming with Content-Type Sniffing
-            else:
-                # Read first chunk to sniff MIME type if it's potentially masked (like .png on BrazzPW)
-                async def stream_generator():
-                    first_chunk = True
-                    async for chunk in resp.aiter_bytes():
-                        yield chunk
-                
-                response_headers = {"Access-Control-Allow-Origin": "*"}
-                for h in ["Content-Range", "Content-Length", "Accept-Ranges"]:
-                    if h.lower() in resp.headers:
-                        response_headers[h] = resp.headers[h.lower()]
-                
-                # Sniff for MPEG-TS (Sync byte 0x47)
-                final_media_type = content_type
-                # Peek first bytes if possible
-                # Since we are using a generator, we'd need to peek. 
-                # Let's check the first byte of the response body if it's already read or via a peek.
-                # For simplicity, if it's from brazzpw or contains 'video/' in manifest, we force it.
-                # Better: read the first 188 bytes (TS packet size)
-                
-                # Re-evaluate media type based on content if needed
-                if "brazzpw" in url or "image/" in content_type:
-                    # We can't easily peek and then yield in a StreamingResponse without buffering.
-                    # Let's buffer the first chunk.
-                    pass
+            is_manifest = "mpegurl" in content_type or url_lower.endswith(".m3u8") or ".m3u8" in url_lower
 
-                # Actually, simpler: just force video/mp2t for anything not a manifest if we suspect masking
-                if "brazzpw.com" in url and "image/" in content_type:
-                    final_media_type = "video/mp2t"
+        if resp.status_code >= 400:
+            await resp.aread()
+            await client.aclose()
+            raise HTTPException(status_code=resp.status_code, detail=f"Upstream error: {resp.status_code}")
+        
+        # 2. Manifest Rewriting
+        if is_manifest:
+            await resp.aread() # Read full manifest into memory
+            content = resp.text
+            await client.aclose() # Close immediately as we are done
+            
+            base_url = str(request.base_url).rstrip("/")
+            proxy_base = f"{base_url}/api/v1/hls/proxy"
+            
+            lines = content.split('\n')
+            new_lines = []
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    if line.startswith("#EXT-X-KEY") and 'URI="' in line:
+                        # Find URI attribute and rewrite it
+                        match = re.search(r'URI="([^"]+)"', line)
+                        if match:
+                            target = urljoin(url, match.group(1))
+                            params = f"?url={quote(target)}"
+                            if referer: params += f"&referer={quote(referer)}"
+                            if origin: params += f"&origin={quote(origin)}"
+                            if user_agent: params += f"&user_agent={quote(user_agent)}"
+                            proxy_url = f"{proxy_base}{params}"
+                            line = line.replace(f'URI="{match.group(1)}"', f'URI="{proxy_url}"')
+                    new_lines.append(line)
+                else:
+                    # It's a URI line
+                    target = urljoin(url, line)
+                    params = f"?url={quote(target)}"
+                    if referer: params += f"&referer={quote(referer)}"
+                    if origin: params += f"&origin={quote(origin)}"
+                    if user_agent: params += f"&user_agent={quote(user_agent)}"
+                    new_lines.append(f"{proxy_base}{params}")
+            
+            return Response(
+                content="\n".join(new_lines),
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+        
+        # 3. Stream Segment without buffering
+        else:
+            response_headers = {"Access-Control-Allow-Origin": "*"}
+            for h in ["Content-Range", "Content-Length", "Accept-Ranges"]:
+                if h.lower() in resp.headers:
+                    response_headers[h] = resp.headers[h.lower()]
+            
+            final_media_type = content_type
+            if "brazzpw.com" in url and "image/" in content_type:
+                final_media_type = "video/mp2t"
 
-                return StreamingResponse(
-                    stream_generator(),
-                    status_code=resp.status_code,
-                    media_type=final_media_type,
-                    headers=response_headers
-                )
-                
+            return StreamingResponse(
+                resp.aiter_bytes(),
+                status_code=resp.status_code,
+                media_type=final_media_type,
+                headers=response_headers,
+                background=BackgroundTask(client.aclose)
+            )
+            
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"HLS Proxy error: {e}")
+        try:
+            await client.aclose()
+        except:
+            pass
         raise HTTPException(status_code=500, detail=str(e))
+
